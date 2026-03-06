@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 .venv/
 models/
+wandb/
 *.safetensors
 *.bin
 *.pt
+training.log
