@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-heading: 'Bricolage Grotesque', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Brutalist Palette */
+  --color-cream: #FEF7CD;
+  --color-cyber-yellow: #FFD700;
+  --color-lime-green: #A7F3D0;
+  --color-hot-coral: #FF6B6B;
+  --color-pure-black: #000000;
+}
+
+@layer base {
+  body {
+    @apply bg-cream text-black font-mono antialiased;
+  }
+}
+
+@layer utilities {
+  .border-brutal {
+    @apply border-4 border-black;
+  }
+  
+  .border-brutal-b {
+    @apply border-b-4 border-black;
+  }
+  
+  .border-brutal-r {
+    @apply border-r-4 border-black;
+  }
+  
+  .border-brutal-t {
+    @apply border-t-4 border-black;
+  }
+
+  .border-brutal-l {
+    @apply border-l-4 border-black;
+  }
+
+  .shadow-brutal {
+    box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+  }
+  
+  .shadow-brutal-sm {
+    box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+  }
+
+  .shadow-brutal-lg {
+    box-shadow: 12px 12px 0px 0px rgba(0,0,0,1);
+  }
+
+  .brutal-btn {
+    @apply transition-all duration-100 border-4 border-black font-heading font-bold uppercase tracking-wide;
+    box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+  }
+  
+  .brutal-btn:active {
+    transform: translate(8px, 8px);
+    box-shadow: 0px 0px 0px 0px rgba(0,0,0,1);
+  }
+
+  .brutal-btn:hover {
+    @apply bg-black text-white;
+  }
+
+  .brutal-btn-primary {
+    @apply bg-hot-coral text-black;
+  }
+  
+  .brutal-btn-primary:hover {
+    @apply bg-black text-hot-coral;
+  }
+
+  .brutal-btn-success {
+    @apply bg-lime-green text-black;
+  }
+  
+  .brutal-btn-success:hover {
+    @apply bg-black text-lime-green;
+  }
+
+  .brutal-btn-warning {
+    @apply bg-cyber-yellow text-black;
+  }
+  
+  .brutal-btn-warning:hover {
+    @apply bg-black text-cyber-yellow;
+  }
+
+  .bg-dot-pattern {
+    background-image: radial-gradient(circle, #000000 2px, transparent 2.5px);
+    background-size: 24px 24px;
+    background-position: 0 0, 12px 12px;
+    background-attachment: fixed;
+  }
+
+  .bg-grid-pattern-dark {
+    background-size: 40px 40px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  }
+
+  .bg-noise {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+  }
+
+  .stat-card {
+    @apply bg-white border-4 border-black shadow-brutal-sm p-4 transition-transform duration-150;
+  }
+  
+  .stat-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px 0px rgba(0,0,0,1);
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-4 py-3 font-heading font-bold uppercase text-sm tracking-wide border-2 border-transparent transition-all duration-150;
+  }
+  
+  .sidebar-item:hover {
+    @apply bg-black text-white border-black;
+  }
+
+  .sidebar-item-active {
+    @apply bg-lime-green text-black border-black shadow-brutal-sm;
+  }
+
+  .patient-card {
+    @apply bg-white border-4 border-black p-4 shadow-brutal-sm cursor-pointer transition-all duration-150;
+  }
+  
+  .patient-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px 0px rgba(0,0,0,1);
+  }
+
+  .match-badge {
+    @apply inline-flex items-center px-2 py-1 font-mono text-xs font-bold uppercase tracking-wider border-2 border-black;
+  }
+
+  .match-badge-success {
+    @apply bg-lime-green text-black;
+  }
+
+  .match-badge-warning {
+    @apply bg-cyber-yellow text-black;
+  }
+
+  .match-badge-danger {
+    @apply bg-hot-coral text-black;
+  }
+
+  .scrollbar-brutal {
+    scrollbar-width: thin;
+    scrollbar-color: #000000 #f0f0f0;
+  }
+
+  .scrollbar-brutal::-webkit-scrollbar {
+    width: 12px;
+  }
+
+  .scrollbar-brutal::-webkit-scrollbar-track {
+    background: #f0f0f0;
+    border-left: 4px solid #000000;
+  }
+
+  .scrollbar-brutal::-webkit-scrollbar-thumb {
+    background: #000000;
+    border: 2px solid #f0f0f0;
+  }
+
+  .scrollbar-brutal::-webkit-scrollbar-thumb:hover {
+    background: #333;
+  }
+}
