@@ -25,8 +25,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Menu,
-  X
+  X,
+  Filter,
+  Download,
+  Eye
 } from "lucide-react";
+import { INDIAN_TRIALS, INDIAN_PATIENTS, ClinicalTrial, Patient } from "@/lib/clinicalData";
 
 interface StatCard {
   title: string;
@@ -63,16 +67,16 @@ interface MatchedPatient {
 const mockStats: StatCard[] = [
   {
     title: "Active Trials",
-    value: 142,
-    change: "+12",
+    value: INDIAN_TRIALS.length,
+    change: "+5",
     changeType: "up",
     icon: <FlaskConical className="w-6 h-6" strokeWidth={3} />,
     color: "#A7F3D0"
   },
   {
-    title: "Patients Processed Today",
-    value: 89,
-    change: "+23",
+    title: "Patients in Database",
+    value: INDIAN_PATIENTS.length,
+    change: "+15",
     changeType: "up",
     icon: <Users className="w-6 h-6" strokeWidth={3} />,
     color: "#FFD700"
@@ -375,7 +379,8 @@ export default function CoordinatorDashboard() {
             </div>
           </div>
 
-          {/* Split View Content */}
+          {/* Main Content Based on Active Nav */}
+          {activeNav === "dashboard" && (
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
             {/* Left Panel - Pending Patient Records */}
             <div className="flex-1 flex flex-col border-b-4 lg:border-b-0 lg:border-r-4 border-black min-h-[400px]">
@@ -514,6 +519,187 @@ export default function CoordinatorDashboard() {
               </div>
             </div>
           </div>
+          )}
+
+          {/* Patients View */}
+          {activeNav === "patients" && (
+            <div className="flex-1 overflow-hidden flex flex-col p-6">
+              <div className="bg-white border-brutal shadow-brutal mb-6">
+                <div className="bg-black px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-lime-green" strokeWidth={3} />
+                    <h3 className="font-heading font-black uppercase text-white">
+                      Patient Database
+                    </h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="flex items-center gap-2 font-mono text-xs font-bold bg-white text-black px-3 py-2 border-2 border-white hover:bg-lime-green">
+                      <Filter className="w-4 h-4" /> Filter
+                    </button>
+                    <button className="flex items-center gap-2 font-mono text-xs font-bold bg-white text-black px-3 py-2 border-2 border-white hover:bg-lime-green">
+                      <Download className="w-4 h-4" /> Export
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="font-mono text-sm mb-4">
+                    <span className="font-bold">{INDIAN_PATIENTS.length}</span> patients in database
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-black">
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">ID</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Age/Gender</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Location</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Diagnosis</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Stage</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">ECOG</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {INDIAN_PATIENTS.slice(0, 15).map((patient) => (
+                          <tr key={patient.id} className="border-b border-black/10 hover:bg-cream">
+                            <td className="py-2 font-mono text-xs font-bold">{patient.id}</td>
+                            <td className="py-2 font-mono text-xs">{patient.age}/{patient.gender.charAt(0)}</td>
+                            <td className="py-2 font-mono text-xs">{patient.city}, {patient.state}</td>
+                            <td className="py-2 font-mono text-xs">{patient.diagnosis}</td>
+                            <td className="py-2 font-mono text-xs">{patient.stage}</td>
+                            <td className="py-2 font-mono text-xs">{patient.ecogStatus}</td>
+                            <td className="py-2">
+                              <Link href="/results">
+                                <button className="font-mono text-xs font-bold bg-black text-white px-2 py-1 hover:bg-lime-green hover:text-black">
+                                  Match
+                                </button>
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Trials View */}
+          {activeNav === "trials" && (
+            <div className="flex-1 overflow-hidden flex flex-col p-6">
+              <div className="bg-white border-brutal shadow-brutal mb-6">
+                <div className="bg-lime-green px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="w-5 h-5 text-black" strokeWidth={3} />
+                    <h3 className="font-heading font-black uppercase text-black">
+                      Clinical Trials Database
+                    </h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="flex items-center gap-2 font-mono text-xs font-bold bg-black text-white px-3 py-2 border-2 border-black hover:bg-cyber-yellow hover:text-black">
+                      <Filter className="w-4 h-4" /> Filter
+                    </button>
+                    <button className="flex items-center gap-2 font-mono text-xs font-bold bg-black text-white px-3 py-2 border-2 border-black hover:bg-cyber-yellow hover:text-black">
+                      <Download className="w-4 h-4" /> Export
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="font-mono text-sm mb-4">
+                    <span className="font-bold">{INDIAN_TRIALS.length}</span> trials in database
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-black">
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">NCT ID</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Title</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Phase</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Status</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Sponsor</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Location</th>
+                          <th className="text-left py-2 font-heading font-black uppercase text-xs">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {INDIAN_TRIALS.slice(0, 15).map((trial) => (
+                          <tr key={trial.id} className="border-b border-black/10 hover:bg-cream">
+                            <td className="py-2 font-mono text-xs font-bold">{trial.trialId}</td>
+                            <td className="py-2 font-mono text-xs max-w-xs truncate">{trial.title}</td>
+                            <td className="py-2 font-mono text-xs">{trial.phase}</td>
+                            <td className="py-2">
+                              <span className={`font-mono text-xs font-bold px-2 py-1 ${
+                                trial.status === "Recruiting" ? "bg-lime-green" : "bg-cyber-yellow"
+                              }`}>
+                                {trial.status}
+                              </span>
+                            </td>
+                            <td className="py-2 font-mono text-xs">{trial.sponsor}</td>
+                            <td className="py-2 font-mono text-xs">{trial.locations[0]?.city}, {trial.locations[0]?.state}</td>
+                            <td className="py-2">
+                              <Link href="/results">
+                                <button className="font-mono text-xs font-bold bg-black text-white px-2 py-1 hover:bg-lime-green hover:text-black">
+                                  View
+                                </button>
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Settings View */}
+          {activeNav === "settings" && (
+            <div className="flex-1 overflow-hidden flex flex-col p-6">
+              <div className="bg-white border-brutal shadow-brutal mb-6">
+                <div className="bg-[#111] px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-cyber-yellow" strokeWidth={3} />
+                    <h3 className="font-heading font-black uppercase text-white">
+                      System Settings
+                    </h3>
+                  </div>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div>
+                    <h4 className="font-heading font-black uppercase mb-3">API Configuration</h4>
+                    <div className="space-y-3 font-mono text-sm">
+                      <div className="flex justify-between items-center p-3 bg-cream border-2 border-black">
+                        <span>Google Maps API</span>
+                        <span className="text-lime-green font-bold">Connected</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-cream border-2 border-black">
+                        <span>Mistral API</span>
+                        <span className="text-lime-green font-bold">Connected</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-cream border-2 border-black">
+                        <span>Groq API</span>
+                        <span className="text-lime-green font-bold">Connected</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-heading font-black uppercase mb-3">Database</h4>
+                    <div className="space-y-3 font-mono text-sm">
+                      <div className="flex justify-between items-center p-3 bg-cream border-2 border-black">
+                        <span>Total Patients</span>
+                        <span className="font-bold">{INDIAN_PATIENTS.length}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-cream border-2 border-black">
+                        <span>Total Trials</span>
+                        <span className="font-bold">{INDIAN_TRIALS.length}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Bottom Action Bar */}
           <div className="bg-white px-6 py-4 border-t-4 border-black flex items-center justify-between">

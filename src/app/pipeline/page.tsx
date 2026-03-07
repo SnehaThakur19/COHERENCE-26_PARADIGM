@@ -217,9 +217,9 @@ export default function PipelinePage() {
   };
 
   const steps = [
-    { step: 1, label: "Upload", icon: Upload, status: currentStep === "upload" ? "active" : (currentStep !== "upload" ? "completed" : "pending") },
-    { step: 2, label: "Anonymize", icon: Shield, status: currentStep === "anonymize" ? "active" : (["processing", "complete"].includes(currentStep) ? "completed" : "pending") },
-    { step: 3, label: "Processing", icon: Brain, status: currentStep === "processing" ? "active" : (currentStep === "complete" ? "completed" : "pending") },
+    { step: 1, label: "Upload", icon: Upload, status: currentStep === "upload" ? "active" : "completed" },
+    { step: 2, label: "Anonymize", icon: Shield, status: currentStep === "anonymize" ? "active" : (currentStep === "upload" ? "pending" : "completed") },
+    { step: 3, label: "Processing", icon: Brain, status: currentStep === "processing" ? "active" : (["upload", "anonymize"].includes(currentStep) ? "pending" : "completed") },
     { step: 4, label: "Results", icon: FileText, status: currentStep === "complete" ? "completed" : "pending" }
   ];
 

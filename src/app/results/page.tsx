@@ -1,745 +1,208 @@
 "use client";
-
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  ChevronDown,
-  ChevronUp,
-  MapPin,
-  Calendar,
-  Users,
-  Stethoscope,
-  FileText,
-  Brain,
-  Shield,
-  Hospital,
-  Target,
-  TrendingUp,
-} from "lucide-react";
+import { ArrowLeft, Activity, AlertTriangle, CheckCircle2, XCircle, MapPin, Calendar, Users, Stethoscope, FileText, Brain, Shield, Hospital, Target, Navigation, Loader2, ChevronDown } from "lucide-react";
+import { GoogleMaps } from "@/components/ui/GoogleMaps";
+import { getDistanceMatrix, geocodeAddress, getCoordinatesForLocation, Coordinates } from "@/lib/googleDistance";
+import { INDIAN_TRIALS, INDIAN_PATIENTS, calculateDistance, ClinicalTrial, Patient } from "@/lib/clinicalData";
+interface CriterionExplanation { id: string; category: string; criterion: string; status: "pass" | "fail" | "warning"; patientValue: string; ruleValue: string; reasoning: string; isML?: boolean; }
+interface TrialMatch { id: string; trialId: string; title: string; sponsor: string; location: string; distance: number; distanceText?: string; durationText?: string; phase: string; status: "pass" | "fail"; confidence: number; overallReasoning: string; criteria: CriterionExplanation[]; coordinates?: {lat: number; lng: number}; withinRadius?: boolean; }
+interface PatientSummary { id: string; age: number; gender: string; diagnosis: string; stage: string; biomarkers: string[]; location: string; ecogScore: number; priorTreatments: string[]; processingTime: string; }
+const ALL_TRIALS = INDIAN_TRIALS;
 
-interface CriterionExplanation {
-  id: string;
-  category: string;
-  criterion: string;
-  status: "pass" | "fail" | "warning";
-  patientValue: string;
-  ruleValue: string;
-  reasoning: string;
-  isML?: boolean;
-}
-
-interface TrialMatch {
-  id: string;
-  trialId: string;
-  title: string;
-  sponsor: string;
-  location: string;
-  distance: number;
-  phase: string;
-  status: "pass" | "fail";
-  confidence: number;
-  overallReasoning: string;
-  criteria: CriterionExplanation[];
-}
-
-interface PatientSummary {
-  id: string;
-  age: number;
-  gender: string;
-  diagnosis: string;
-  stage: string;
-  biomarkers: string[];
-  location: string;
-  ecogScore: number;
-  priorTreatments: string[];
-  processingTime: string;
-}
-
-const MOCK_PATIENT: PatientSummary = {
-  id: "ANONYMIZED_90210",
-  age: 54,
-  gender: "Male",
-  diagnosis: "Non-Small Cell Lung Cancer (NSCLC), Adenocarcinoma",
-  stage: "Stage IV",
-  biomarkers: ["EGFR exon 19 deletion (+)", "PD-L1 TPS 80%"],
-  location: "Boston, MA",
-  ecogScore: 0,
-  priorTreatments: ["Adjuvant Carboplatin (Stage IIA, 3 years ago)"],
-  processingTime: "2.3 seconds",
-};
-
-const MOCK_TRIALS: TrialMatch[] = [
-  {
-    id: "1",
-    trialId: "NCT04532820",
-    title: "Osimertinib vs. Chemotherapy in EGFR-Mutated NSCLC",
-    sponsor: "Massachusetts General Hospital",
-    location: "Boston, MA",
-    distance: 3.2,
-    phase: "Phase 3",
-    status: "pass",
-    confidence: 94,
-    overallReasoning:
-      "Patient meets key inclusion criteria with high confidence. EGFR mutation status and disease stage align perfectly. Prior adjuvant therapy does not disqualify per protocol definition.",
-    criteria: [
-      {
-        id: "C1",
-        category: "Age",
-        criterion: "Age 18-75 years",
-        status: "pass",
-        patientValue: "54 years",
-        ruleValue: "18-75 years",
-        reasoning: "Patient age falls within the required range.",
-      },
-      {
-        id: "C2",
-        category: "Diagnosis",
-        criterion: "Histologically confirmed NSCLC with EGFR mutation",
-        status: "pass",
-        patientValue: "NSCLC Adenocarcinoma, EGFR exon 19 deletion (+)",
-        ruleValue: "EGFR mutation positive",
-        reasoning: "Biomarker matches exactly. EGFR exon 19 deletion detected.",
-        isML: true,
-      },
-      {
-        id: "C3",
-        category: "Staging",
-        criterion: "Stage IIIB or IV disease",
-        status: "pass",
-        patientValue: "Stage IV",
-        ruleValue: "IIIB or IV",
-        reasoning: "Disease stage meets criteria.",
-      },
-      {
-        id: "C4",
-        category: "Performance",
-        criterion: "ECOG Performance Status 0-1",
-        status: "pass",
-        patientValue: "ECOG 0",
-        ruleValue: "0-1",
-        reasoning: "Patient has excellent functional status.",
-      },
-      {
-        id: "C5",
-        category: "Prior Therapy",
-        criterion: "No prior systemic therapy for metastatic disease",
-        status: "pass",
-        patientValue: "Adjuvant carboplatin 3 years ago (Stage IIA)",
-        ruleValue: "No prior systemic therapy for metastatic disease",
-        reasoning:
-          "Prior adjuvant therapy was for early-stage disease, not metastatic. Does not meet exclusion criterion.",
-        isML: true,
-      },
-      {
-        id: "C6",
-        category: "Geography",
-        criterion: "Within 50 miles of trial site",
-        status: "pass",
-        patientValue: "3.2 miles",
-        ruleValue: "< 50 miles",
-        reasoning: "Patient is within acceptable distance.",
-      },
-    ],
-  },
-  {
-    id: "2",
-    trialId: "NCT05284712",
-    title: "Immunotherapy Combination for Advanced NSCLC",
-    sponsor: "Dana-Farber Cancer Institute",
-    location: "Boston, MA",
-    distance: 5.8,
-    phase: "Phase 2",
-    status: "pass",
-    confidence: 78,
-    overallReasoning:
-      "Strong match with minor considerations. PD-L1 expression is favorable. Prior chemotherapy history requires clinical review.",
-    criteria: [
-      {
-        id: "C1",
-        category: "Age",
-        criterion: "Age 18-80 years",
-        status: "pass",
-        patientValue: "54 years",
-        ruleValue: "18-80 years",
-        reasoning: "Patient age falls within the required range.",
-      },
-      {
-        id: "C2",
-        category: "Diagnosis",
-        criterion: "Histologically confirmed Stage III/IV NSCLC",
-        status: "pass",
-        patientValue: "Stage IV NSCLC",
-        ruleValue: "Stage III/IV NSCLC",
-        reasoning: "Diagnosis and stage match criteria.",
-      },
-      {
-        id: "C3",
-        category: "Biomarker",
-        criterion: "PD-L1 expression ≥ 1%",
-        status: "pass",
-        patientValue: "PD-L1 TPS 80%",
-        ruleValue: "≥ 1%",
-        reasoning: "High PD-L1 expression favorable for immunotherapy.",
-        isML: true,
-      },
-      {
-        id: "C4",
-        category: "Prior Therapy",
-        criterion: "No prior immunotherapy or chemotherapy for NSCLC",
-        status: "warning",
-        patientValue: "Prior adjuvant carboplatin",
-        ruleValue: "No prior chemo/immunotherapy",
-        reasoning:
-          "Prior adjuvant chemotherapy for earlier stage may or may not disqualify. Requires PI review.",
-        isML: true,
-      },
-      {
-        id: "C5",
-        category: "Geography",
-        criterion: "Within 75 miles of trial site",
-        status: "pass",
-        patientValue: "5.8 miles",
-        ruleValue: "< 75 miles",
-        reasoning: "Patient is within acceptable distance.",
-      },
-    ],
-  },
-  {
-    id: "3",
-    trialId: "NCT03864575",
-    title: "Novel TKI for EGFR Resistance Mutations",
-    sponsor: "Johns Hopkins University",
-    location: "Baltimore, MD",
-    distance: 412,
-    phase: "Phase 1",
-    status: "fail",
-    confidence: 12,
-    overallReasoning:
-      "Excluded due to geographic distance. Medical eligibility otherwise would score higher with clinical review.",
-    criteria: [
-      {
-        id: "C1",
-        category: "Age",
-        criterion: "Age 18-85 years",
-        status: "pass",
-        patientValue: "54 years",
-        ruleValue: "18-85 years",
-        reasoning: "Patient age falls within the required range.",
-      },
-      {
-        id: "C2",
-        category: "Diagnosis",
-        criterion: "EGFR-mutated NSCLC with progression on prior TKI",
-        status: "pass",
-        patientValue: "EGFR exon 19 deletion, TKI-naive",
-        ruleValue: "Progression on prior TKI",
-        reasoning: "Patient has not failed prior TKI therapy - may not meet progression criterion.",
-        isML: true,
-      },
-      {
-        id: "C3",
-        category: "Geography",
-        criterion: "Within 100 miles of Baltimore site",
-        status: "fail",
-        patientValue: "412 miles",
-        ruleValue: "< 100 miles",
-        reasoning: "Patient location exceeds maximum travel distance.",
-      },
-    ],
-  },
-];
-
-function CriterionRow({
-  criterion,
-  isExpanded,
-  onToggle,
-}: {
-  criterion: CriterionExplanation;
-  isExpanded: boolean;
-  onToggle: () => void;
-}) {
-  const statusStyles = {
-    pass: "bg-lime-green text-black",
-    fail: "bg-hot-coral text-black",
-    warning: "bg-cyber-yellow text-black",
-  };
-
-  const statusIcon = {
-    pass: <CheckCircle2 className="w-4 h-4" strokeWidth={3} />,
-    fail: <XCircle className="w-4 h-4" strokeWidth={3} />,
-    warning: <AlertTriangle className="w-4 h-4" strokeWidth={3} />,
-  };
-
-  return (
-    <div className="border-b-2 border-black/10 last:border-0">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 md:p-4 hover:bg-black/5 transition-colors text-left"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={statusStyles[criterion.status]}>{statusIcon[criterion.status]}</div>
-          <div className="min-w-0">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-black/50 block">
-              {criterion.category}
-              {criterion.isML && (
-                <span className="ml-2 inline-flex items-center gap-1">
-                  <Brain className="w-3 h-3" />
-                  ML
-                </span>
-              )}
-            </span>
-            <p className="font-mono text-xs md:text-sm font-bold truncate">{criterion.criterion}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 ml-2">
-          <span
-            className={`font-heading text-xs md:text-sm font-black uppercase ${
-              criterion.status === "pass"
-                ? "text-lime-green"
-                : criterion.status === "fail"
-                ? "text-hot-coral"
-                : "text-cyber-yellow"
-            }`}
-          >
-            {criterion.status}
-          </span>
-          {isExpanded ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
-        </div>
-      </button>
-      {isExpanded && (
-        <div className="px-4 pb-4 md:px-6 md:pb-6 bg-black/[0.02]">
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <span className="font-mono text-[9px] uppercase tracking-wider text-black/40 block">
-                Patient Value
-              </span>
-              <span className="font-mono text-xs md:text-sm font-bold">
-                {criterion.patientValue}
-              </span>
-            </div>
-            <div>
-              <span className="font-mono text-[9px] uppercase tracking-wider text-black/40 block">
-                Required
-              </span>
-              <span className="font-mono text-xs md:text-sm font-bold">
-                {criterion.ruleValue}
-              </span>
-            </div>
-          </div>
-          <div className="bg-white border-2 border-black/10 p-3">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-black/40 block mb-1">
-              Reasoning
-            </span>
-            <p className="font-mono text-xs md:text-sm leading-relaxed">{criterion.reasoning}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TrialCard({
-  trial,
-  isExpanded,
-  onToggle,
-}: {
-  trial: TrialMatch;
-  isExpanded: boolean;
-  onToggle: () => void;
-}) {
-  const confidenceColor =
-    trial.confidence >= 80
-      ? "#A7F3D0"
-      : trial.confidence >= 50
-      ? "#FFD700"
-      : "#FF6B6B";
-
-  const statusBadge =
-    trial.status === "pass" ? (
-      <span className="bg-lime-green px-2 py-1 text-xs font-heading font-black uppercase border-2 border-black">
-        ELIGIBLE
-      </span>
-    ) : (
-      <span className="bg-hot-coral px-2 py-1 text-xs font-heading font-black uppercase border-2 border-black">
-        INELIGIBLE
-      </span>
+function getMatchingTrials(patient: Patient, trials: ClinicalTrial[]) {
+  return trials.filter(trial => {
+    if (patient.age < trial.minAge || patient.age > trial.maxAge) return false;
+    if (trial.gender !== "All" && patient.gender !== trial.gender) return false;
+    if (patient.ecogStatus > trial.ecogMax) return false;
+    
+    const diagnosisMatch = trial.requiredDiagnoses.some(d => 
+      patient.diagnosis.toLowerCase().includes(d.toLowerCase())
     );
-
-  return (
-    <div className="border-brutal shadow-brutal-sm bg-white overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full p-4 md:p-6 hover:bg-black/[0.02] transition-colors text-left"
-      >
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-xs text-black/50">{trial.trialId}</span>
-              <span className="font-mono text-xs text-black/50">•</span>
-              <span className="font-mono text-xs text-black/50">{trial.phase}</span>
-            </div>
-            <h3 className="font-heading text-lg md:text-xl font-black uppercase leading-tight mb-2">
-              {trial.title}
-            </h3>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-black/60">
-              <span className="flex items-center gap-1">
-                <Hospital className="w-3 h-3" />
-                {trial.sponsor}
-              </span>
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {trial.location}
-              </span>
-              <span className="flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" />
-                {trial.distance} mi
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            {statusBadge}
-            <div
-              className="flex items-center gap-2"
-              style={{ color: confidenceColor }}
-            >
-              <div
-                className="font-heading text-3xl md:text-4xl font-black"
-                style={{ color: confidenceColor }}
-              >
-                {trial.confidence}%
-              </div>
-              <Target className="w-5 h-5" strokeWidth={3} />
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-xs text-black/40 uppercase tracking-wider">
-            Click to {isExpanded ? "collapse" : "view"} eligibility details
-          </span>
-          {isExpanded ? (
-            <ChevronUp className="w-5 h-5" />
-          ) : (
-            <ChevronDown className="w-5 h-5" />
-          )}
-        </div>
-      </button>
-      {isExpanded && (
-        <div className="border-t-4 border-black">
-          <div className="bg-cyber-yellow px-4 md:px-6 py-3 border-b-2 border-black">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4" strokeWidth={3} />
-              <span className="font-heading font-black uppercase text-sm">
-                Eligibility Breakdown
-              </span>
-            </div>
-          </div>
-          {trial.criteria.map((criterion) => (
-            <CriterionRow
-              key={criterion.id}
-              criterion={criterion}
-              isExpanded={false}
-              onToggle={() => {}}
-            />
-          ))}
-          <div className="bg-black px-4 md:px-6 py-4">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block mb-2">
-              Overall AI Assessment
-            </span>
-            <p className="font-mono text-sm text-white">{trial.overallReasoning}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    if (!diagnosisMatch) return false;
+    
+    if (trial.requiredStages && trial.requiredStages.length > 0) {
+      const stageMatch = trial.requiredStages.some(s => patient.stage.includes(s));
+      if (!stageMatch) return false;
+    }
+    
+    if (trial.requiredBiomarkers && trial.requiredBiomarkers.length > 0) {
+      const biomarkerMatch = trial.requiredBiomarkers.some(b => 
+        Object.values(patient.biomarkers).some(pb => pb.toLowerCase().includes(b.toLowerCase()))
+      );
+      if (!biomarkerMatch) return false;
+    }
+    
+    return true;
+  });
 }
 
+const RADIUS_KM = 150;
+function CriterionRow({ criterion }: { criterion: CriterionExplanation }) {
+  const statusStyles = { pass: "bg-lime-green text-black", fail: "bg-hot-coral text-black", warning: "bg-cyber-yellow text-black" };
+  const statusIcon = { pass: <CheckCircle2 className="w-4 h-4" strokeWidth={3} />, fail: <XCircle className="w-4 h-4" strokeWidth={3} />, warning: <AlertTriangle className="w-4 h-4" strokeWidth={3} /> };
+  return <div className="border-b-2 border-black/10 p-3 flex items-center gap-3"><div className={statusStyles[criterion.status]}>{statusIcon[criterion.status]}</div><div><span className="font-mono text-[10px] uppercase text-black/50">{criterion.category}{criterion.isML && " ML"}</span><p className="font-mono text-xs font-bold">{criterion.criterion}</p></div><span className={`ml-auto font-heading text-xs font-black uppercase ${criterion.status==="pass"?"text-lime-green":criterion.status==="fail"?"text-hot-coral":"text-cyber-yellow"}`}>{criterion.status}</span></div>;
+}
+function TrialCard({ trial, isExpanded, onToggle }: { trial: TrialMatch; isExpanded: boolean; onToggle: () => void }) {
+  const confidenceColor = trial.confidence >= 80 ? "#A7F3D0" : trial.confidence >= 50 ? "#FFD700" : "#FF6B6B";
+  const statusBadge = trial.status === "pass" ? <span className="bg-lime-green px-2 py-1 text-xs font-heading font-black uppercase border-2 border-black">ELIGIBLE</span> : <span className="bg-hot-coral px-2 py-1 text-xs font-heading font-black uppercase border-2 border-black">INELIGIBLE</span>;
+  return <div className="border-brutal shadow-brutal-sm bg-white"><button onClick={onToggle} className="w-full p-4 md:p-6 text-left"><div className="flex items-start justify-between"><div><div className="font-mono text-xs text-black/50 mb-1">{trial.trialId} - {trial.phase}</div><h3 className="font-heading text-lg font-black uppercase">{trial.title}</h3><div className="flex gap-3 mt-2 font-mono text-xs text-black/60"><span><Hospital className="w-3 h-3 inline" /> {trial.sponsor}</span><span><MapPin className="w-3 h-3 inline" /> {trial.location}</span>{trial.distanceText && <span className={trial.withinRadius ? "text-lime-green" : "text-hot-coral"}><Navigation className="w-3 h-3 inline" /> {trial.distanceText}{trial.durationText && ` (${trial.durationText})`}</span>}</div></div><div className="text-right">{statusBadge}<div className="font-heading text-3xl font-black mt-2" style={{color:confidenceColor}}>{trial.confidence}%</div></div></div></button>{isExpanded && <div className="border-t-4 border-black"><div className="bg-cyber-yellow px-4 py-2 border-b-2 border-black font-heading font-black uppercase text-sm">Eligibility</div>{trial.criteria.map(c => <CriterionRow key={c.id} criterion={c} />)}<div className="bg-black px-4 py-3"><p className="font-mono text-sm text-white">{trial.overallReasoning}</p></div></div>}</div>;
+}
 export default function ResultsPage() {
   const [expandedTrial, setExpandedTrial] = useState<string | null>(null);
-
-  const sortedTrials = useMemo(() => {
-    return [...MOCK_TRIALS].sort((a, b) => b.confidence - a.confidence);
-  }, []);
-
-  const stats = useMemo(() => {
-    const eligible = sortedTrials.filter((t) => t.status === "pass").length;
-    const avgConfidence =
-      sortedTrials.reduce((sum, t) => sum + t.confidence, 0) / sortedTrials.length;
-    return {
-      total: sortedTrials.length,
-      eligible,
-      avgConfidence: Math.round(avgConfidence),
-    };
-  }, [sortedTrials]);
-
+  const [isCalculating, setIsCalculating] = useState(true);
+  const [patientCoords, setPatientCoords] = useState<Coordinates | null>(null);
+  const [trials, setTrials] = useState<TrialMatch[]>([]);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(INDIAN_PATIENTS[0].id);
+  
+  const selectedPatient = useMemo(() => 
+    INDIAN_PATIENTS.find(p => p.id === selectedPatientId) || INDIAN_PATIENTS[0]
+  , [selectedPatientId]);
+  
+  useEffect(() => {
+    async function calculateMatches() {
+      setIsCalculating(true);
+      try {
+        const patient = selectedPatient;
+        const patientLocation = `${patient.city}, ${patient.state}`;
+        
+        let coords: Coordinates | null = patient.coordinates;
+        if (!coords) {
+          const fallbackCoords = getCoordinatesForLocation(patientLocation);
+          if (fallbackCoords) {
+            coords = fallbackCoords;
+          } else {
+            const g = await geocodeAddress(patientLocation);
+            if (g) coords = g;
+          }
+        }
+        
+        if (coords) {
+          setPatientCoords(coords);
+        } else {
+          setPatientCoords(patient.coordinates);
+          coords = patient.coordinates;
+        }
+        
+        const matchingTrials = getMatchingTrials(patient, ALL_TRIALS);
+        
+        const trialLocations = matchingTrials.map(t => t.locations[0]);
+        const destinationAddresses = trialLocations.map(loc => `${loc.facility}, ${loc.city}, ${loc.state}`);
+        
+        const distanceResults = await getDistanceMatrix(patientLocation, destinationAddresses);
+        
+        const trialsWithDistances: TrialMatch[] = matchingTrials.map((trial, index) => {
+          const primaryLocation = trial.locations[0];
+          const trialCoords = primaryLocation.coordinates;
+          const haversineDistance = calculateDistance(coords!, trialCoords);
+          
+          let distance = haversineDistance;
+          let distanceText = `${Math.round(haversineDistance)} km`;
+          let durationText = "Calculating...";
+          
+          if (distanceResults && distanceResults[index] && distanceResults[index].distanceValue > 0) {
+            distance = distanceResults[index].distanceValue / 1000;
+            distanceText = distanceResults[index].distance;
+            durationText = distanceResults[index].duration;
+          }
+          
+          const withinRadius = distance <= RADIUS_KM;
+          
+          const criteria: CriterionExplanation[] = [
+            { id: "C1", category: "Age", criterion: `Age ${trial.minAge}-${trial.maxAge} years`, status: patient.age >= trial.minAge && patient.age <= trial.maxAge ? "pass" : "fail", patientValue: `${patient.age} years`, ruleValue: `${trial.minAge}-${trial.maxAge} years`, reasoning: patient.age >= trial.minAge && patient.age <= trial.maxAge ? "Within range" : "Outside range" },
+            { id: "C2", category: "Gender", criterion: trial.gender === "All" ? "Any gender" : trial.gender, status: trial.gender === "All" || patient.gender === trial.gender ? "pass" : "fail", patientValue: patient.gender, ruleValue: trial.gender, reasoning: trial.gender === "All" || patient.gender === trial.gender ? "Matches" : "Does not match" },
+            { id: "C3", category: "Diagnosis", criterion: trial.requiredDiagnoses.join(", "), status: "pass", patientValue: patient.diagnosis, ruleValue: trial.requiredDiagnoses.join(", "), reasoning: "Diagnosis matches", isML: true },
+            { id: "C4", category: "ECOG", criterion: `ECOG <= ${trial.ecogMax}`, status: patient.ecogStatus <= trial.ecogMax ? "pass" : "fail", patientValue: `ECOG ${patient.ecogStatus}`, ruleValue: `<= ${trial.ecogMax}`, reasoning: patient.ecogStatus <= trial.ecogMax ? "Within range" : "Exceeds limit" },
+            { id: "C5", category: "Geography", criterion: `Within ${trial.radiusKm} km`, status: withinRadius ? "pass" : "fail", patientValue: `${distanceText}${durationText !== "Calculating..." ? ` (${durationText})` : ""}`, ruleValue: `< ${trial.radiusKm} km`, reasoning: withinRadius ? "Within travel distance" : "Too far from trial site" },
+          ];
+          
+          if (trial.requiredBiomarkers && trial.requiredBiomarkers.length > 0) {
+            const biomarkerValues = Object.values(patient.biomarkers).join(", ");
+            criteria.push({
+              id: "C6",
+              category: "Biomarkers",
+              criterion: trial.requiredBiomarkers.join(", "),
+              status: "pass",
+              patientValue: biomarkerValues || "Not tested",
+              ruleValue: trial.requiredBiomarkers.join(", "),
+              reasoning: "Biomarker analysis complete",
+              isML: true
+            });
+          }
+          
+          const passCount = criteria.filter(c => c.status === "pass").length;
+          const confidence = Math.round((passCount / criteria.length) * 100);
+          
+          return {
+            id: trial.id,
+            trialId: trial.trialId,
+            title: trial.title,
+            sponsor: trial.sponsor,
+            location: `${primaryLocation.city}, ${primaryLocation.state}`,
+            distance: Math.round(distance),
+            distanceText,
+            durationText,
+            phase: trial.phase,
+            status: withinRadius ? "pass" : "fail",
+            confidence,
+            overallReasoning: withinRadius 
+              ? `Patient meets ${passCount}/${criteria.length} criteria. Eligible for this trial.`
+              : `Patient excluded due to geographic distance (${Math.round(distance)} km from trial site).`,
+            criteria,
+            coordinates: trialCoords,
+            withinRadius
+          };
+        });
+        
+        setTrials(trialsWithDistances);
+      } catch (e) { 
+        console.error(e); 
+        setMapError("Error calculating matches"); 
+      }
+      finally { setIsCalculating(false); }
+    }
+    calculateMatches();
+  }, [selectedPatient]);
+  const sortedTrials = useMemo(() => [...trials].sort((a,b) => b.confidence - a.confidence), [trials]);
+  const stats = useMemo(() => ({ total:sortedTrials.length, eligible:sortedTrials.filter(t=>t.status==="pass").length, avgConfidence:Math.round(sortedTrials.length ? sortedTrials.reduce((s,t)=>s+t.confidence,0)/sortedTrials.length : 0) }), [sortedTrials]);
+  const trialsForMap = useMemo(() => trials.filter(t=>t.coordinates).map(t=>({name:t.title, location:t.location, lat:t.coordinates!.lat, lng:t.coordinates!.lng, withinRadius:t.withinRadius||false, distance:t.distanceText||t.distance+" km"})), [trials]);
   return (
-    <div className="min-h-screen bg-cream font-mono bg-noise overflow-x-hidden">
-      <div className="fixed inset-0 bg-dot-pattern opacity-[0.06] pointer-events-none z-0" />
-
-      <header className="bg-black text-white px-4 md:px-8 py-3 flex items-center justify-between border-brutal-b shrink-0 relative z-50">
-        <Link href="/dashboard" className="flex items-center gap-3 hover:text-lime-green transition-colors">
-          <ArrowLeft className="w-5 h-5 md:w-6 md:h-6" strokeWidth={3} />
-          <span className="font-heading text-lg md:text-2xl font-black uppercase tracking-tighter">
-            Coherence TrialMatch
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-2 px-3 py-2 border-2 border-white/30">
-            <Shield className="w-4 h-4 text-lime-green" strokeWidth={3} />
-            <span className="font-mono text-xs font-bold uppercase tracking-wider">
-              HIPAA Compliant
-            </span>
-          </div>
-          <div className="px-3 py-2 bg-cyber-yellow text-black font-heading font-black text-sm md:text-base border-2 border-black uppercase">
-            Match Results
-          </div>
-        </div>
-      </header>
-
-      <main className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-8">
+    <div className="min-h-screen bg-cream font-mono">
+      <header className="bg-black text-white px-4 md:px-8 py-3 flex items-center justify-between border-brutal-b"><Link href="/dashboard" className="flex items-center gap-3 hover:text-lime-green"><ArrowLeft className="w-5 h-5" /><span className="font-heading text-xl font-black uppercase">Coherence</span></Link><div className="flex items-center gap-3"><Shield className="w-4 h-4 text-lime-green" /><span className="px-3 py-2 bg-cyber-yellow text-black font-heading font-black text-sm border-2 border-black uppercase">Results</span></div></header>
+      <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-black text-white border-brutal shadow-brutal p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Users className="w-5 h-5 text-lime-green" strokeWidth={3} />
-                <span className="font-heading font-black uppercase">Patient Profile</span>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                    Patient ID
-                  </span>
-                  <span className="font-heading text-xl font-black text-lime-green">
-                    {MOCK_PATIENT.id}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                      Age / Gender
-                    </span>
-                    <span className="font-mono text-sm font-bold">
-                      {MOCK_PATIENT.age} / {MOCK_PATIENT.gender}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                      ECOG Score
-                    </span>
-                    <span className="font-mono text-sm font-bold">{MOCK_PATIENT.ecogScore}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                    Diagnosis
-                  </span>
-                  <span className="font-mono text-sm font-bold">{MOCK_PATIENT.diagnosis}</span>
-                </div>
-
-                <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                    Stage
-                  </span>
-                  <span className="font-heading text-lg font-black text-cyber-yellow">
-                    {MOCK_PATIENT.stage}
-                  </span>
-                </div>
-
-                <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                    Biomarkers
-                  </span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {MOCK_PATIENT.biomarkers.map((bm, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 bg-white/10 border border-white/20 font-mono text-[10px]"
-                      >
-                        {bm}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                    Location
-                  </span>
-                  <span className="font-mono text-sm font-bold flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {MOCK_PATIENT.location}
-                  </span>
-                </div>
-
-                <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                    Prior Treatments
-                  </span>
-                  <ul className="mt-1 space-y-1">
-                    {MOCK_PATIENT.priorTreatments.map((treatment, i) => (
-                      <li key={i} className="font-mono text-xs text-white/70">
-                        • {treatment}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="pt-4 border-t border-white/20">
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 block">
-                    Processing Time
-                  </span>
-                  <span className="font-heading text-lg font-black text-white">
-                    {MOCK_PATIENT.processingTime}
-                  </span>
-                </div>
-              </div>
+            {/* Patient Selector */}
+            <div className="bg-cyber-yellow border-brutal shadow-brutal p-4">
+              <label className="font-heading font-black uppercase text-sm mb-2 block">
+                Select Patient
+              </label>
+              <select 
+                value={selectedPatientId}
+                onChange={(e) => setSelectedPatientId(e.target.value)}
+                className="w-full bg-white border-2 border-black px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              >
+                {INDIAN_PATIENTS.map(patient => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.id} - {patient.diagnosis.substring(0, 25)}...
+                  </option>
+                ))}
+              </select>
             </div>
-
-            <div className="bg-lime-green border-brutal shadow-brutal p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Activity className="w-5 h-5 text-black" strokeWidth={3} />
-                <span className="font-heading font-black uppercase">Match Summary</span>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-sm">Total Trials Analyzed</span>
-                  <span className="font-heading text-2xl font-black">{stats.total}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-sm">Eligible Matches</span>
-                  <span className="font-heading text-2xl font-black text-lime-green bg-black px-3 py-1">
-                    {stats.eligible}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-sm">Avg Confidence</span>
-                  <span className="font-heading text-2xl font-black">{stats.avgConfidence}%</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[#111] text-white border-brutal shadow-brutal p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Stethoscope className="w-5 h-5 text-cyber-yellow" strokeWidth={3} />
-                <span className="font-heading font-black uppercase">Engine Status</span>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs">Rule Engine</span>
-                  <span className="flex items-center gap-1 text-lime-green text-xs font-bold">
-                    <CheckCircle2 className="w-3 h-3" />
-                    ACTIVE
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs">ML Semantic Matcher</span>
-                  <span className="flex items-center gap-1 text-lime-green text-xs font-bold">
-                    <CheckCircle2 className="w-3 h-3" />
-                    ACTIVE
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs">Geo Filtering</span>
-                  <span className="flex items-center gap-1 text-lime-green text-xs font-bold">
-                    <CheckCircle2 className="w-3 h-3" />
-                    ACTIVE
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs">Anonymization</span>
-                  <span className="flex items-center gap-1 text-lime-green text-xs font-bold">
-                    <CheckCircle2 className="w-3 h-3" />
-                    VERIFIED
-                  </span>
-                </div>
-              </div>
-            </div>
+            
+            <div className="bg-black text-white border-brutal shadow-brutal p-6"><div className="flex items-center gap-2 mb-4"><Users className="w-5 h-5 text-lime-green" /><span className="font-heading font-black uppercase">Patient</span></div><div className="space-y-3"><div><span className="font-mono text-[10px] text-white/40">ID</span><div className="font-heading text-xl text-lime-green">{selectedPatient.id}</div></div><div><span className="font-mono text-[10px] text-white/40">Age/Gender</span><div className="font-mono text-sm">{selectedPatient.age}/{selectedPatient.gender}</div></div><div><span className="font-mono text-[10px] text-white/40">Diagnosis</span><div className="font-mono text-sm">{selectedPatient.diagnosis}</div></div><div><span className="font-mono text-[10px] text-white/40">Stage</span><div className="font-heading text-lg text-cyber-yellow">{selectedPatient.stage}</div></div><div><span className="font-mono text-[10px] text-white/40">Location</span><div className="font-mono text-sm flex items-center gap-1"><MapPin className="w-3 h-3" />{selectedPatient.city}, {selectedPatient.state}</div></div></div></div>
+            <div className="bg-lime-green border-brutal shadow-brutal p-6"><div className="flex items-center gap-2 mb-4"><Activity className="w-5 h-5 text-black" /><span className="font-heading font-black uppercase">Summary</span></div><div className="space-y-3"><div className="flex justify-between"><span className="font-mono text-sm">Total</span><span className="font-heading text-2xl font-black">{stats.total}</span></div><div className="flex justify-between"><span className="font-mono text-sm">Eligible</span><span className="font-heading text-2xl font-black bg-black text-lime-green px-2">{stats.eligible}</span></div><div className="flex justify-between"><span className="font-mono text-sm">Avg</span><span className="font-heading text-2xl font-black">{stats.avgConfidence}%</span></div></div></div>
+            <div className="bg-[#111] text-white border-brutal shadow-brutal p-6"><div className="flex items-center gap-2 mb-4"><Stethoscope className="w-5 h-5 text-cyber-yellow" /><span className="font-heading font-black uppercase">Engine</span></div><div className="space-y-2"><div className="flex justify-between"><span className="font-mono text-xs">Rule Engine</span><span className="text-lime-green text-xs flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />ACTIVE</span></div><div className="flex justify-between"><span className="font-mono text-xs">ML Matcher</span><span className="text-lime-green text-xs flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />ACTIVE</span></div><div className="flex justify-between"><span className="font-mono text-xs">Geo Filter</span><span className="text-lime-green text-xs flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />ACTIVE</span></div></div></div>
+            <div className="bg-white border-brutal shadow-brutal overflow-hidden"><div className="bg-cyber-yellow px-4 py-2 border-b-2 border-black"><span className="font-heading font-black uppercase text-sm">Map</span></div><div className="h-64">{isCalculating ? <div className="w-full h-full bg-slate-800 flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin" /></div> : patientCoords ? <GoogleMaps patientLocation={`${selectedPatient.city}, ${selectedPatient.state}`} patientLat={patientCoords.lat} patientLng={patientCoords.lng} trials={trialsForMap} radiusMiles={RADIUS_KM} /> : <div className="w-full h-full bg-slate-800 flex items-center justify-center text-white text-xs">{mapError || "No map"}</div>}</div><div className="p-3 bg-black/5 border-t-2"><span className="font-mono text-[10px]">Radius: {RADIUS_KM} km</span></div></div>
           </div>
-
           <div className="lg:col-span-3">
-            <div className="bg-black text-white px-4 md:px-6 py-4 border-brutal border-b-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Target className="w-6 h-6 text-lime-green" strokeWidth={3} />
-                <h2 className="font-heading font-black text-xl md:text-2xl uppercase">
-                  Ranked Trial Matches
-                </h2>
-              </div>
-              <div className="flex items-center gap-2 font-mono text-xs">
-                <Calendar className="w-4 h-4" />
-                <span>March 6, 2026</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {sortedTrials.map((trial) => (
-                <TrialCard
-                  key={trial.id}
-                  trial={trial}
-                  isExpanded={expandedTrial === trial.id}
-                  onToggle={() =>
-                    setExpandedTrial(expandedTrial === trial.id ? null : trial.id)
-                  }
-                />
-              ))}
-            </div>
-
-            {stats.eligible > 0 && (
-              <div className="mt-6 bg-lime-green border-brutal shadow-brutal p-4 md:p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <CheckCircle2 className="w-6 h-6 text-black" strokeWidth={3} />
-                  <h3 className="font-heading font-black text-lg uppercase">
-                    Recommended Action
-                  </h3>
-                </div>
-                <p className="font-mono text-sm md:text-base mb-4">
-                  <strong>{sortedTrials[0].trialId}</strong> is the highest-confidence match at{" "}
-                  <strong className="bg-black text-lime-green px-2">
-                    {sortedTrials[0].confidence}%
-                  </strong>
-                  . Patient meets all critical inclusion criteria. Proceed with full medical record
-                  review and consent process.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button className="brutal-btn bg-black text-white px-6 py-3 font-heading font-black uppercase text-sm">
-                    Export Full Report
-                  </button>
-                  <button className="brutal-btn bg-cyber-yellow text-black px-6 py-3 font-heading font-black uppercase text-sm">
-                    Schedule Review Call
-                  </button>
-                </div>
-              </div>
-            )}
+            <div className="bg-black text-white px-6 py-4 border-brutal border-b-4 flex items-center justify-between"><div className="flex items-center gap-3"><Target className="w-6 h-6 text-lime-green" /><h2 className="font-heading font-black text-xl uppercase">Ranked Matches</h2></div><span className="font-mono text-xs"><Calendar className="w-4 h-4 inline" /> March 6, 2026</span></div>
+            {isCalculating ? <div className="p-12 flex flex-col items-center bg-white border-brutal"><Loader2 className="w-12 h-12 animate-spin mb-4" /><p className="font-mono text-sm">Calculating real distances via OSRM...</p></div> : <div className="space-y-4 mt-4">{sortedTrials.map(t => <TrialCard key={t.id} trial={t} isExpanded={expandedTrial===t.id} onToggle={()=>setExpandedTrial(expandedTrial===t.id?null:t.id)} />)}</div>}
+            {stats.eligible>0 && !isCalculating && <div className="mt-6 bg-lime-green border-brutal shadow-brutal p-6"><div className="flex items-center gap-3 mb-4"><CheckCircle2 className="w-6 h-6 text-black" /><h3 className="font-heading font-black uppercase">Recommended</h3></div><p className="font-mono text-sm mb-4"><strong>{sortedTrials[0].trialId}</strong> - {sortedTrials[0].confidence}% match</p><div className="flex gap-3"><button className="brutal-btn bg-black text-white px-6 py-3 font-heading font-black uppercase text-sm">Export</button><button className="brutal-btn bg-cyber-yellow text-black px-6 py-3 font-heading font-black uppercase text-sm">Schedule</button></div></div>}
           </div>
         </div>
       </main>
-
-      <footer className="bg-transparent px-4 py-8 pb-12 w-full flex justify-center mt-8">
-        <div className="w-full max-w-7xl bg-[#111] text-white border-brutal shadow-brutal p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-3">
-            <Activity className="size-6 stroke-[3px] text-lime-green" />
-            <div className="font-heading text-xl font-black uppercase tracking-tighter">
-              Coherence TrialMatch AI
-            </div>
-          </div>
-          <div className="font-mono text-xs text-white/40 uppercase tracking-widest">
-            Powered by Fine-Tuned LLM + Rule Engine
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
