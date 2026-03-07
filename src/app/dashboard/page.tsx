@@ -8,6 +8,7 @@ import {
   FlaskConical, 
   Settings, 
   Plus,
+  MessageSquare,
   TrendingUp,
   Activity,
   CheckCircle,
@@ -312,6 +313,13 @@ export default function CoordinatorDashboard() {
                 <FlaskConical className="w-5 h-5" strokeWidth={2.5} />
                 <span className={!sidebarOpen ? "lg:hidden" : ""}>Trials</span>
               </button>
+
+              <Link href="/chat">
+                <button className="sidebar-item w-full">
+                  <MessageSquare className="w-5 h-5" strokeWidth={2.5} />
+                  <span className={!sidebarOpen ? "lg:hidden" : ""}>AI Chat</span>
+                </button>
+              </Link>
 
               <button
                 onClick={() => setActiveNav("settings")}
